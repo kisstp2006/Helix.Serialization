@@ -74,6 +74,10 @@ namespace helix::serialization::yaml
 
     // The parsed form of a YAML stream, all nodes in one array. The parsed text must outlive the tree; it cannot be copied
     // (scalars point into it and into its own buffer), only moved.
+    // The numbers of plain scalars, as Tree::AsInt and AsFloat read them, from text.
+    bool ParseInt(StringView text, i64& out);
+    bool ParseFloat(StringView text, double& out);
+
     class Tree
     {
     public:

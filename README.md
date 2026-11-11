@@ -14,6 +14,7 @@ writes and reads types as YAML and binary, type trees, and binary serialized fil
 | `Source/Helix/Serialization/Transfer/Traits.h` | How a type declares `Transfer`, `ValueKind`, `AssetReference`, `ReferenceTable` |
 | `Source/Helix/Serialization/Transfer/Yaml.h` | `YamlWrite`, `YamlRead`, `WriteYaml`, `ReadYaml` |
 | `Source/Helix/Serialization/Transfer/Binary.h` | `BinaryWrite`, `BinaryRead`, `SafeBinaryRead`, `WriteBinary`, `ReadBinary` |
+| `Source/Helix/Serialization/Transfer/Property.h` | `PropertyWrite`, `ApplyProperty`: one field changed by its path (`m_LocalPosition.x`, `list.Array.size`, `list.Array.data[3]`), as prefab modifications do |
 | `Source/Helix/Serialization/Transfer/TypeTree.h` | `TypeTree`, `TypeTreeOf<T>()`, `TypeHashOf<T>()` |
 | `Source/Helix/Serialization/SerializedFile/SerializedFile.h` | `SerializedFileWriter`, `SerializedFile` |
 | `Tests/`, `Benchmarks/`, `Fuzz/` | Scenes, prefabs, every scalar and container form, damaged input; throughput; fuzz targets for every reader |

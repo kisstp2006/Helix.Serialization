@@ -27,11 +27,8 @@ namespace helix::serialization::yaml
         return kNoNode;
     }
 
-    bool Tree::AsInt(u32 node, i64& out) const
+    bool ParseInt(StringView t, i64& out)
     {
-        if (!IsScalar(node))
-            return false;
-        StringView t = nodes[node].Text();
         const char* begin = t.Data();
         const char* end = begin + t.Size();
         bool negative = begin < end && *begin == '-';
@@ -51,11 +48,8 @@ namespace helix::serialization::yaml
         return r.ec == std::errc() && r.ptr == end && begin < end;
     }
 
-    bool Tree::AsFloat(u32 node, double& out) const
+    bool ParseFloat(StringView t, double& out)
     {
-        if (!IsScalar(node))
-            return false;
-        StringView t = nodes[node].Text();
         if (t == StringView("inf") || t == StringView(".inf") || t == StringView("Infinity"))
             return out = INFINITY, true;
         if (t == StringView("-inf") || t == StringView("-.inf") || t == StringView("-Infinity"))
@@ -96,6 +90,10 @@ namespace helix::serialization::yaml
         auto r = std::from_chars(begin, end, out);
         return r.ec == std::errc() && r.ptr == end && begin < end;
     }
+
+    bool Tree::AsInt(u32 node, i64& out) const { return IsScalar(node) && ParseInt(nodes[node].Text(), out); }
+
+    bool Tree::AsFloat(u32 node, double& out) const { return IsScalar(node) && ParseFloat(nodes[node].Text(), out); }
 
     StringView Tree::Store(StringView text)
     {

@@ -1,6 +1,7 @@
 #include <Support/Types.h>
 
 #include <Helix/Serialization/Transfer/Binary.h>
+#include <Helix/Serialization/Transfer/Property.h>
 #include <Helix/Serialization/Transfer/Yaml.h>
 #include <Helix/Serialization/Yaml/Parser.h>
 #include <Helix/Testing/Test.h>
@@ -433,4 +434,80 @@ HX_TEST(Transfer, ObjectReferencesGoThroughTheTable)
     yaml::Emitter e2(raw);
     WriteYaml(e2, h);
     HX_CHECK(Has(raw, "near: {fileID: 1005}"));
+}
+
+namespace
+{
+    struct Point
+    {
+        static constexpr StringView kTypeName = "Point";
+        static constexpr bool kFlow = true;
+        float x = 0, y = 0;
+        template <class V>
+        void Transfer(V& v)
+        {
+            v.Field("x", x);
+            v.Field("y", y);
+        }
+    };
+
+    enum class Switch : u8
+    {
+        Off = 0,
+        On = 1,
+    };
+
+    struct Target
+    {
+        static constexpr StringView kTypeName = "Target";
+        String m_Name;
+        bool m_IsActive = true;
+        u8 m_Layer = 0;
+        Switch m_Mode = Switch::Off;
+        Point m_Position;
+        Array<Point> m_Path;
+        Handle m_Link;
+        Array<Handle> m_Links;
+        template <class V>
+        void Transfer(V& v)
+        {
+            v.Field("m_Name", m_Name);
+            v.Field("m_IsActive", m_IsActive);
+            v.Field("m_Layer", m_Layer);
+            v.Field("m_Mode", m_Mode);
+            v.Field("m_Position", m_Position);
+            v.Field("m_Path", m_Path);
+            v.Field("m_Link", m_Link);
+            v.Field("m_Links", m_Links);
+        }
+    };
+}
+
+HX_TEST(Transfer, PropertyPathsChangeOneField)
+{
+    Table table;
+    Target t;
+    String error;
+    AssetReference none;
+    HX_CHECK(ApplyProperty(t, "m_Name", "Renamed", none, &table, error) && t.m_Name == StringView("Renamed"));
+    HX_CHECK(ApplyProperty(t, "m_IsActive", "0", none, &table, error) && !t.m_IsActive);
+    HX_CHECK(ApplyProperty(t, "m_Layer", "5", none, &table, error) && t.m_Layer == 5);
+    HX_CHECK(ApplyProperty(t, "m_Mode", "1", none, &table, error) && t.m_Mode == Switch::On);
+    HX_CHECK(ApplyProperty(t, "m_Position.y", "0x3F800000(1)", none, &table, error) && t.m_Position.y == 1.0f && t.m_Position.x == 0.0f);
+    HX_CHECK(ApplyProperty(t, "m_Path.Array.size", "3", none, &table, error) && t.m_Path.Size() == 3u);
+    HX_CHECK(ApplyProperty(t, "m_Path.Array.data[2].x", "-2.5", none, &table, error) && t.m_Path[2].x == -2.5f);
+    AssetReference five;
+    five.fileID = 5;
+    HX_CHECK(ApplyProperty(t, "m_Link", "", five, &table, error) && t.m_Link.object == 1005);
+    HX_CHECK(ApplyProperty(t, "m_Links.Array.size", "1", none, &table, error));
+    HX_CHECK(ApplyProperty(t, "m_Links.Array.data[0]", "", five, &table, error) && t.m_Links[0].object == 1005);
+    // What does not fit is an error and changes nothing.
+    HX_CHECK(!ApplyProperty(t, "m_Layer", "300", none, &table, error) && t.m_Layer == 5 && error.View().Contains("fit"));
+    HX_CHECK(!ApplyProperty(t, "m_Nothing", "1", none, &table, error) && error.View().Contains("no field"));
+    HX_CHECK(!ApplyProperty(t, "m_Path.Array.data[7].x", "1", none, &table, error));
+    HX_CHECK(!ApplyProperty(t, "m_Position", "1", none, &table, error));
+    HX_CHECK(!ApplyProperty(t, "m_Name.x", "1", none, &table, error));
+    HX_CHECK(!ApplyProperty(t, "m_IsActive", "yes", none, &table, error) && !t.m_IsActive);
+    // A field name that only starts the path's name does not match.
+    HX_CHECK(!ApplyProperty(t, "m_Nam", "x", none, &table, error) && t.m_Name == StringView("Renamed"));
 }
