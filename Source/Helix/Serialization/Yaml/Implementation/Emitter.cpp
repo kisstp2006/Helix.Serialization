@@ -23,10 +23,19 @@ namespace helix::serialization::yaml
     void Emitter::BeginDocument(i64 classID, i64 fileID, bool stripped)
     {
         out_.Append("---");
+        char number[24];
         if (classID >= 0)
-            FormatAppend(out_, " !h!{}", classID);
+        {
+            out_.Append(" !h!");
+            auto r = std::to_chars(number, number + sizeof(number), classID);
+            out_.Append(StringView(number, usize(r.ptr - number)));
+        }
         if (fileID != 0)
-            FormatAppend(out_, " &{}", fileID);
+        {
+            out_.Append(" &");
+            auto r = std::to_chars(number, number + sizeof(number), fileID);
+            out_.Append(StringView(number, usize(r.ptr - number)));
+        }
         if (stripped)
             out_.Append(" stripped");
         out_.Append('\n');
@@ -156,18 +165,28 @@ namespace helix::serialization::yaml
         keyPending_ = false;
     }
 
+    // Numbers are always safe as plain scalars: no scans.
+    void Emitter::Number(StringView text)
+    {
+        BeforeValue();
+        out_.Append(text);
+        if (levels_.Empty() || !levels_.Back().flow)
+            out_.Append('\n');
+        keyPending_ = false;
+    }
+
     void Emitter::Int(i64 value)
     {
         char buffer[32];
         auto r = std::to_chars(buffer, buffer + sizeof(buffer), value);
-        Scalar(StringView(buffer, usize(r.ptr - buffer)));
+        Number(StringView(buffer, usize(r.ptr - buffer)));
     }
 
     void Emitter::UInt(u64 value)
     {
         char buffer[32];
         auto r = std::to_chars(buffer, buffer + sizeof(buffer), value);
-        Scalar(StringView(buffer, usize(r.ptr - buffer)));
+        Number(StringView(buffer, usize(r.ptr - buffer)));
     }
 
     void Emitter::Float(double value)
@@ -178,7 +197,7 @@ namespace helix::serialization::yaml
             return Scalar(value > 0 ? "Infinity" : "-Infinity");
         char buffer[64];
         auto r = std::to_chars(buffer, buffer + sizeof(buffer), value);
-        Scalar(StringView(buffer, usize(r.ptr - buffer)));
+        Number(StringView(buffer, usize(r.ptr - buffer)));
     }
 
     void Emitter::Float(float value)
@@ -189,7 +208,7 @@ namespace helix::serialization::yaml
             return Scalar(value > 0 ? "Infinity" : "-Infinity");
         char buffer[64];
         auto r = std::to_chars(buffer, buffer + sizeof(buffer), value);
-        Scalar(StringView(buffer, usize(r.ptr - buffer)));
+        Number(StringView(buffer, usize(r.ptr - buffer)));
     }
 
     void Emitter::Key(StringView key)

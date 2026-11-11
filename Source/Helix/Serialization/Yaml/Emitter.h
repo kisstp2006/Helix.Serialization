@@ -61,6 +61,7 @@ namespace helix::serialization::yaml
         };
 
         void BeforeValue();
+        void Number(StringView text);
         void BeginContainer(bool mapping, bool flow);
         void EndContainer();
         void Text(StringView text, ScalarStyle style);
