@@ -290,6 +290,16 @@ HX_TEST(Yaml, NumbersAndFloats)
     }
 }
 
+HX_TEST(Yaml, FloatsAsTheirBitsInHex)
+{
+    // The reference files write floats as their IEEE 754 bits, the decimal value in parentheses for reading.
+    Tree t;
+    HX_REQUIRE(ParseText("a: 0x3F800000(1)\nb: 0x3f800000\nc: 0xBF000000(-0.5)\nd: 0x3FF8000000000000\ne: 0x10\nf: 0x3F80000(1\n", t));
+    u32 r = t.documents[0].root;
+    HX_CHECK(Float(t, t.Find(r, "a")) == 1.0 && Float(t, t.Find(r, "b")) == 1.0 && Float(t, t.Find(r, "c")) == -0.5);
+    HX_CHECK(Float(t, t.Find(r, "d")) == 1.5 && Float(t, t.Find(r, "e")) == 16.0 && Float(t, t.Find(r, "f")) == -12345);
+}
+
 HX_TEST(Yaml, LineEndingsCommentsAndBlankLines)
 {
     Tree t;

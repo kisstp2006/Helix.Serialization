@@ -41,6 +41,8 @@ Transform:
 - Block mappings, block sequences at the indentation of their key or deeper, sequences of mappings, flow mappings and
   sequences (nested and empty).
 - Plain, single quoted and double quoted scalars, with escapes and continuation lines; comments and blank lines.
+- Numbers: decimal and 0x hexadecimal integers, floats with an exponent, inf and nan, and floats as their IEEE 754
+  bits in hex (`0x3F800000`, optionally followed by the decimal value in parentheses).
 - `\n` and `\r\n` line endings.
 
 ## Reading

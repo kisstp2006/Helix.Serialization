@@ -107,7 +107,8 @@ namespace helix::serialization::yaml
         bool IsScalar(u32 node) const { return node != kNoNode && nodes[node].kind == NodeKind::Scalar; }
         bool IsMapping(u32 node) const { return node != kNoNode && nodes[node].kind == NodeKind::Mapping; }
         bool IsSequence(u32 node) const { return node != kNoNode && nodes[node].kind == NodeKind::Sequence; }
-        // Numbers from plain scalars: decimal or 0x hexadecimal integers, floats with an exponent, inf and nan.
+        // Numbers from plain scalars: decimal or 0x hexadecimal integers, floats with an exponent, inf and nan, and floats as
+        // their IEEE 754 bits in hex (0x3F800000, 8 digits a float, 16 a double, an optional "(1)" after them).
         bool AsInt(u32 node, i64& out) const;
         bool AsFloat(u32 node, double& out) const;
 

@@ -64,6 +64,33 @@ namespace helix::serialization::yaml
             return out = NAN, true;
         const char* begin = t.Data();
         const char* end = begin + t.Size();
+        // IEEE 754 bits in hex, as the reference files write floats: 0x3F800000, optionally with the decimal value in
+        // parentheses after it (only the bits count). 8 digits are a float, 16 a double, others an integer.
+        if (end - begin > 2 && begin[0] == '0' && (begin[1] == 'x' || begin[1] == 'X'))
+        {
+            const char* digits = begin + 2;
+            const char* stop = digits;
+            while (stop < end && *stop != '(')
+                stop++;
+            if (stop < end && end[-1] != ')')
+                return false;
+            u64 bits = 0;
+            auto r = std::from_chars(digits, stop, bits, 16);
+            if (r.ec != std::errc() || r.ptr != stop)
+                return false;
+            if (stop - digits == 8)
+            {
+                u32 b = u32(bits);
+                float f;
+                std::memcpy(&f, &b, 4);
+                out = f;
+            }
+            else if (stop - digits == 16)
+                std::memcpy(&out, &bits, 8);
+            else
+                out = double(bits);
+            return true;
+        }
         if (begin < end && *begin == '+')
             begin++;
         auto r = std::from_chars(begin, end, out);
