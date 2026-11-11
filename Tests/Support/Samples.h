@@ -66,4 +66,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
 )";
+
+    // JSON with every kind of value, escapes, nesting and number forms.
+    inline constexpr const char kJson[] = R"({
+    "name": "Main Camera",
+    "enabled": true,
+    "parent": null,
+    "position": {"x": 0, "y": 1.5, "z": -10},
+    "tags": ["a", "b\n\"c\"", "é中😀", "", "\u0001\/"],
+    "matrix": [[1, 0], [0, 1e-3], []],
+    "empty": {},
+    "big": 18446744073709551615,
+    "neg": -9223372036854775808,
+    "exp": 2.5E+3,
+    "nested": {"list": [{"weight": 0.75, "on": false}, "inner", -0.0]}
+})";
 }

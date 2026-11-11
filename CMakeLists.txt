@@ -10,4 +10,8 @@ helix_add_library(helix_serialization ALIAS Serialization PUBLIC_DEPS Helix::Cor
 
 helix_add_test_suite(helix_serialization_tests DEPS Helix::Serialization)
 helix_add_benchmark_suite(helix_serialization_bench DEPS Helix::Serialization)
+if(TARGET helix_serialization_bench)
+    # The benchmarks use the test types.
+    target_include_directories(helix_serialization_bench PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Tests)
+endif()
 helix_add_fuzz_suite(helix_serialization_fuzz DEPS Helix::Serialization ROUNDS 2000)
