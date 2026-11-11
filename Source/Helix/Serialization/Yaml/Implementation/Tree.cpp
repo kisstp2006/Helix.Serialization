@@ -64,7 +64,7 @@ namespace helix::serialization::yaml
             return out = NAN, true;
         const char* begin = t.Data();
         const char* end = begin + t.Size();
-        // IEEE 754 bits in hex, as the reference files write floats: 0x3F800000, optionally with the decimal value in
+        // IEEE 754 bits in hex, as scene files may write floats: 0x3F800000, optionally with the decimal value in
         // parentheses after it (only the bits count). 8 digits are a float, 16 a double, others an integer.
         if (end - begin > 2 && begin[0] == '0' && (begin[1] == 'x' || begin[1] == 'X'))
         {
