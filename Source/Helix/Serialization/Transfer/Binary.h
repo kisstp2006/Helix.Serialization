@@ -22,7 +22,7 @@ namespace helix::serialization
         static constexpr bool kReading = false;
         static constexpr bool kText = false;
 
-        explicit BinaryWrite(Array<u8>& out) : out_(out), base_(out.Size()) {}
+        explicit BinaryWrite(Array<u8>& out, ReferenceTable* references = nullptr) : out_(out), base_(out.Size()), references_(references) {}
 
         template <class T>
         void Field(StringView, T& value)
@@ -31,6 +31,10 @@ namespace helix::serialization
         }
 
         i32 Version() const { return version_; }
+
+        // Object references go through the table (the raw value is the fileID without one).
+        void SetReferences(ReferenceTable* table) { references_ = table; }
+        void ObjectReference(u64& object) { TransferObjectReference(*this, references_, object); }
 
         template <class T>
         void Value(T& value)
@@ -90,6 +94,7 @@ namespace helix::serialization
 
         Array<u8>& out_;
         usize base_;
+        ReferenceTable* references_ = nullptr;
         i32 version_ = 1;
     };
 
@@ -101,7 +106,7 @@ namespace helix::serialization
         static constexpr bool kReading = true;
         static constexpr bool kText = false;
 
-        explicit BinaryRead(Span<const u8> data) : data_(data) {}
+        explicit BinaryRead(Span<const u8> data, ReferenceTable* references = nullptr) : data_(data), references_(references) {}
 
         template <class T>
         void Field(StringView name, T& value)
@@ -117,6 +122,10 @@ namespace helix::serialization
         bool Failed() const { return failed_; }
         const String& Error() const { return error_; }
         usize Position() const { return pos_; }
+
+        // Object references go through the table (the raw value is the fileID without one).
+        void SetReferences(ReferenceTable* table) { references_ = table; }
+        void ObjectReference(u64& object) { TransferObjectReference(*this, references_, object); }
 
         template <class T>
         void Value(T& value)
@@ -208,6 +217,7 @@ namespace helix::serialization
         }
 
         Span<const u8> data_;
+        ReferenceTable* references_ = nullptr;
         usize pos_ = 0;
         i32 version_ = 1;
         bool failed_ = false;
@@ -225,7 +235,10 @@ namespace helix::serialization
         static constexpr bool kReading = true;
         static constexpr bool kText = false;
 
-        SafeBinaryRead(const TypeTree& tree, Span<const u8> data) : tree_(tree), data_(data) {}
+        SafeBinaryRead(const TypeTree& tree, Span<const u8> data, ReferenceTable* references = nullptr)
+            : tree_(tree), data_(data), references_(references)
+        {
+        }
 
         template <class T>
         void Field(StringView name, T& value)
@@ -248,6 +261,9 @@ namespace helix::serialization
         }
 
         i32 Version() const { return version_; }
+        // Object references go through the table (the raw value is the fileID without one).
+        void SetReferences(ReferenceTable* table) { references_ = table; }
+        void ObjectReference(u64& object) { TransferObjectReference(*this, references_, object); }
         bool Failed() const { return failed_; }
         const String& Error() const { return error_; }
 
@@ -374,6 +390,7 @@ namespace helix::serialization
 
         const TypeTree& tree_;
         Span<const u8> data_;
+        ReferenceTable* references_ = nullptr;
         Array<Child> children_;
         Array<Frame> frames_;
         i32 version_ = 1;
@@ -444,17 +461,17 @@ namespace helix::serialization
     }
 
     template <class T>
-    void WriteBinary(T& object, Array<u8>& out)
+    void WriteBinary(T& object, Array<u8>& out, ReferenceTable* references = nullptr)
     {
-        BinaryWrite w(out);
+        BinaryWrite w(out, references);
         w.Value(object);
     }
 
     // Reads the binary form of T; the data must end with the object.
     template <class T>
-    bool ReadBinary(Span<const u8> data, T& object, String& error)
+    bool ReadBinary(Span<const u8> data, T& object, String& error, ReferenceTable* references = nullptr)
     {
-        BinaryRead r(data);
+        BinaryRead r(data, references);
         r.Value(object);
         if (!r.Failed() && r.Position() != data.Size())
             return error = Format("{} bytes after the object", data.Size() - r.Position()), false;
@@ -465,9 +482,9 @@ namespace helix::serialization
 
     // Reads binary data written with `tree` into T.
     template <class T>
-    bool ReadBinary(const TypeTree& tree, Span<const u8> data, T& object, String& error)
+    bool ReadBinary(const TypeTree& tree, Span<const u8> data, T& object, String& error, ReferenceTable* references = nullptr)
     {
-        SafeBinaryRead r(tree, data);
+        SafeBinaryRead r(tree, data, references);
         r.At(0, 0, object);
         if (!r.Failed() && r.Skip(0, 0) != data.Size() && !r.Failed())
             return error = "the data does not end with the object", false;

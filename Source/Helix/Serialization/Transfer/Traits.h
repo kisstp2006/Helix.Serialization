@@ -87,6 +87,33 @@ namespace helix::serialization
         }
     };
 
+    // Turns object references into file references and back (an engine's object table). Every visitor has
+    // ObjectReference(u64&), which a reference type calls from its Transfer: the reference then reads and writes as the
+    // fields of an AssetReference ({fileID: N} or {fileID, guid, type}).
+    class ReferenceTable
+    {
+    public:
+        virtual ~ReferenceTable() = default;
+        virtual AssetReference ToFile(u64 object) = 0;
+        virtual u64 FromFile(const AssetReference& reference) = 0;
+    };
+
+    template <class V>
+    void TransferObjectReference(V& v, ReferenceTable* table, u64& object)
+    {
+        AssetReference r;
+        if constexpr (!V::kReading)
+        {
+            if (table)
+                r = table->ToFile(object);
+            else
+                r.fileID = i64(object);
+        }
+        r.Transfer(v);
+        if constexpr (V::kReading)
+            object = table ? table->FromFile(r) : u64(r.fileID);
+    }
+
     namespace detail
     {
         // Lets the traits ask whether a type has Transfer without a real visitor.

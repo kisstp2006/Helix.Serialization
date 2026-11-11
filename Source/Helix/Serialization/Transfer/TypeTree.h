@@ -77,6 +77,8 @@ namespace helix::serialization
         }
 
         i32 Version() const { return version_; }
+        // A reference is the fields of an AssetReference.
+        void ObjectReference(u64& object) { TransferObjectReference(*this, nullptr, object); }
 
         template <class T>
         void Node(StringView name, T& value)

@@ -341,3 +341,96 @@ HX_TEST(Transfer, SafeBinaryReadsOlderLayouts)
         }
     }
 }
+
+namespace
+{
+    // A reference type as an engine has one: an object handle that files keep as {fileID, guid, type}.
+    struct Handle
+    {
+        static constexpr StringView kTypeName = "PPtr";
+        static constexpr bool kFlow = true;
+        u64 object = 0;
+        template <class V>
+        void Transfer(V& v)
+        {
+            v.ObjectReference(object);
+        }
+    };
+
+    struct Holder
+    {
+        static constexpr StringView kTypeName = "Holder";
+        Handle near;
+        Handle far;
+        Array<Handle> list;
+        template <class V>
+        void Transfer(V& v)
+        {
+            v.Field("near", near);
+            v.Field("far", far);
+            v.Field("list", list);
+        }
+    };
+
+    // Objects 1000 + n are fileID n of this file; 9000 is an object of another asset.
+    struct Table final : ReferenceTable
+    {
+        Guid other;
+        AssetReference ToFile(u64 object) override
+        {
+            AssetReference r;
+            if (object == 9000)
+                r.fileID = 11400000, r.guid = other, r.type = 2;
+            else if (object)
+                r.fileID = i64(object - 1000);
+            return r;
+        }
+        u64 FromFile(const AssetReference& r) override
+        {
+            if (r.guid.IsValid())
+                return r.guid == other && r.fileID == 11400000 ? 9000 : 0;
+            return r.fileID ? u64(r.fileID) + 1000 : 0;
+        }
+    };
+}
+
+HX_TEST(Transfer, ObjectReferencesGoThroughTheTable)
+{
+    Table table;
+    HX_REQUIRE(Guid::TryParse("0123456789abcdef0123456789abcdef", table.other));
+    Holder h;
+    h.near.object = 1005;
+    h.far.object = 9000;
+    h.list.Push(Handle{1007});
+    h.list.Push(Handle{0});
+    String text;
+    yaml::Emitter e(text);
+    e.Directives();
+    e.BeginDocument(1, 1);
+    WriteYaml(e, h, &table);
+    HX_CHECK(Has(text, "near: {fileID: 5}") && Has(text, "far: {fileID: 11400000, guid: 0123456789abcdef0123456789abcdef, type: 2}"));
+    HX_CHECK(Has(text, "- {fileID: 7}") && Has(text, "- {fileID: 0}"));
+    yaml::Tree tree;
+    String error;
+    HX_REQUIRE(yaml::Parse(text, tree, error));
+    Holder back;
+    Array<String> errors;
+    HX_CHECK(ReadYaml(tree, tree.documents[0].root, back, errors, &table));
+    HX_CHECK(back.near.object == 1005 && back.far.object == 9000 && back.list.Size() == 2u && back.list[0].object == 1007 && back.list[1].object == 0);
+    // Binary, directly and through the type tree, which names the reference's fields.
+    Array<u8> bytes;
+    WriteBinary(h, bytes, &table);
+    Holder direct, safe;
+    HX_CHECK(ReadBinary(Span<const u8>(bytes), direct, error, &table) && direct.far.object == 9000 && direct.list[0].object == 1007);
+    HX_CHECK(ReadBinary(TypeTreeOf<Holder>(), Span<const u8>(bytes), safe, error, &table) && safe.near.object == 1005);
+    const TypeTree& tt = TypeTreeOf<Holder>();
+    bool named = false;
+    for (u32 n = 0; n < tt.nodes.Size(); n++)
+        named = named || tt.FieldName(n) == StringView("guid");
+    HX_CHECK(named);
+    // Without a table the raw value is the fileID.
+    String raw;
+    yaml::Emitter e2(raw);
+    WriteYaml(e2, h);
+    HX_CHECK(Has(raw, "near: {fileID: 1005}"));
+}

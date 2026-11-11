@@ -17,7 +17,7 @@ namespace helix::serialization
         static constexpr bool kReading = false;
         static constexpr bool kText = true;
 
-        explicit YamlWrite(yaml::Emitter& emitter) : e_(emitter) {}
+        explicit YamlWrite(yaml::Emitter& emitter, ReferenceTable* references = nullptr) : e_(emitter), references_(references) {}
 
         template <class T>
         void Field(StringView name, T& value)
@@ -27,6 +27,10 @@ namespace helix::serialization
         }
 
         i32 Version() const { return version_; }
+
+        // Object references go through the table (the raw value is the fileID without one).
+        void SetReferences(ReferenceTable* table) { references_ = table; }
+        void ObjectReference(u64& object) { TransferObjectReference(*this, references_, object); }
 
         template <class T>
         void Value(T& value)
@@ -93,6 +97,7 @@ namespace helix::serialization
         void Bytes(const u8* data, usize size);
 
         yaml::Emitter& e_;
+        ReferenceTable* references_ = nullptr;
         i32 version_ = 1;
     };
 
@@ -105,7 +110,7 @@ namespace helix::serialization
         static constexpr bool kReading = true;
         static constexpr bool kText = true;
 
-        explicit YamlRead(const yaml::Tree& tree) : t_(tree) {}
+        explicit YamlRead(const yaml::Tree& tree, ReferenceTable* references = nullptr) : t_(tree), references_(references) {}
 
         template <class T>
         void Field(StringView name, T& value)
@@ -116,6 +121,10 @@ namespace helix::serialization
         }
 
         i32 Version() const { return version_; }
+
+        // Object references go through the table (the raw value is the fileID without one).
+        void SetReferences(ReferenceTable* table) { references_ = table; }
+        void ObjectReference(u64& object) { TransferObjectReference(*this, references_, object); }
         // One line per problem, "line 12: m_Layer: ...".
         const Array<String>& Errors() const { return errors_; }
 
@@ -211,6 +220,7 @@ namespace helix::serialization
         void Bytes(u32 node, StringView name, Array<u8>& out);
 
         const yaml::Tree& t_;
+        ReferenceTable* references_ = nullptr;
         u32 mapping_ = yaml::kNoNode;
         // The entry after the last field found: fields are usually read in the order they were written.
         u32 cursor_ = 0;
@@ -220,9 +230,9 @@ namespace helix::serialization
 
     // A document's body: "<TypeName>:" and the fields below it.
     template <class T>
-    void WriteYaml(yaml::Emitter& emitter, T& object)
+    void WriteYaml(yaml::Emitter& emitter, T& object, ReferenceTable* references = nullptr)
     {
-        YamlWrite w(emitter);
+        YamlWrite w(emitter, references);
         emitter.BeginMapping();
         emitter.Key(TypeNameOf<T>());
         w.Value(object);
@@ -232,7 +242,7 @@ namespace helix::serialization
     // Reads the body of a document (its root mapping, with the type name as the one key). False with every problem in
     // `errors` when something did not read; the fields that did are set.
     template <class T>
-    bool ReadYaml(const yaml::Tree& tree, u32 root, T& object, Array<String>& errors)
+    bool ReadYaml(const yaml::Tree& tree, u32 root, T& object, Array<String>& errors, ReferenceTable* references = nullptr)
     {
         u32 body = tree.Find(root, TypeNameOf<T>());
         if (body == yaml::kNoNode)
@@ -240,7 +250,7 @@ namespace helix::serialization
             errors.Push(Format("line {}: no {} in the document", root == yaml::kNoNode ? 0u : tree[root].line, TypeNameOf<T>()));
             return false;
         }
-        YamlRead r(tree);
+        YamlRead r(tree, references);
         r.Value(body, TypeNameOf<T>(), object);
         for (const String& e : r.Errors())
             errors.Push(e);

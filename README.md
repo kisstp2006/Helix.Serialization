@@ -11,7 +11,7 @@ writes and reads types as YAML and binary, type trees, and binary serialized fil
 | `Source/Helix/Serialization/Yaml/Parser.h` | `Parse(text, tree, error)` |
 | `Source/Helix/Serialization/Yaml/Emitter.h` | `Emitter`, a streaming writer of the dialect, and `Write(tree, out)` |
 | `Source/Helix/Serialization/Json/Tree.h`, `Parser.h`, `Writer.h` | The same flat tree for JSON, `Parse` (RFC 8259), a compact or pretty `Writer`, `Write(tree, out)` |
-| `Source/Helix/Serialization/Transfer/Traits.h` | How a type declares `Transfer`, `ValueKind`, `AssetReference` |
+| `Source/Helix/Serialization/Transfer/Traits.h` | How a type declares `Transfer`, `ValueKind`, `AssetReference`, `ReferenceTable` |
 | `Source/Helix/Serialization/Transfer/Yaml.h` | `YamlWrite`, `YamlRead`, `WriteYaml`, `ReadYaml` |
 | `Source/Helix/Serialization/Transfer/Binary.h` | `BinaryWrite`, `BinaryRead`, `SafeBinaryRead`, `WriteBinary`, `ReadBinary` |
 | `Source/Helix/Serialization/Transfer/TypeTree.h` | `TypeTree`, `TypeTreeOf<T>()`, `TypeHashOf<T>()` |
@@ -131,6 +131,22 @@ writes a type as `{x: 0, y: 0}`. The visitors:
 
 Transfer must visit the same fields whatever the values are, except that text may leave out fields (as `AssetReference`
 does for local references).
+
+Object references: a reference type calls `v.ObjectReference(u64&)` in its Transfer instead of naming fields. Every
+visitor then reads and writes the reference as the fields of an `AssetReference`, turned into the caller's object
+values by a `ReferenceTable` (`ToFile`, `FromFile`) passed to `WriteYaml`, `ReadYaml`, `WriteBinary`, `ReadBinary`,
+`SerializedFileWriter::Add` and `SerializedFile::Read`. Without a table the raw value is the fileID.
+
+```cpp
+struct Handle
+{
+    static constexpr StringView kTypeName = "PPtr";
+    static constexpr bool kFlow = true;
+    u64 object = 0;
+    template <class V>
+    void Transfer(V& v) { v.ObjectReference(object); }
+};
+```
 
 ## Serialized files
 

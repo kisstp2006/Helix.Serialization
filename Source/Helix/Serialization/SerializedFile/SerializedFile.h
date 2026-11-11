@@ -48,13 +48,13 @@ namespace helix::serialization
         explicit SerializedFileWriter(bool typeTrees = true) : typeTrees_(typeTrees) {}
 
         template <class T>
-        void Add(i64 fileID, i32 classID, T& object)
+        void Add(i64 fileID, i32 classID, T& object, ReferenceTable* references = nullptr)
         {
             u32 type = Type(classID, TypeTreeOf<T>(), TypeHashOf<T>());
             while (data_.Size() % 8 != 0)
                 data_.Push(u8(0));
             usize at = data_.Size();
-            WriteBinary(object, data_);
+            WriteBinary(object, data_, references);
             objects_.Push({fileID, type, at, data_.Size() - at});
         }
 
@@ -92,15 +92,15 @@ namespace helix::serialization
         // Reads an object into T: directly when T has the hash the object was written with, through the file's type tree
         // when it has another, an error when it has another and the file has no type trees.
         template <class T>
-        bool Read(u32 object, T& out, String& error) const
+        bool Read(u32 object, T& out, String& error, ReferenceTable* references = nullptr) const
         {
             const SerializedType& type = types_[objects_[object].type];
             if (type.hash == TypeHashOf<T>())
-                return ReadBinary(Data(object), out, error);
+                return ReadBinary(Data(object), out, error, references);
             if (!typeTrees_)
                 return error = Format("object {} was written with another layout of {} and the file has no type trees", objects_[object].fileID, TypeNameOf<T>()),
                        false;
-            return ReadBinary(type.tree, Data(object), out, error);
+            return ReadBinary(type.tree, Data(object), out, error, references);
         }
 
     private:
