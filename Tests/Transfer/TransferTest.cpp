@@ -441,7 +441,6 @@ namespace
     struct Point
     {
         static constexpr StringView kTypeName = "Point";
-        static constexpr bool kFlow = true;
         float x = 0, y = 0;
         template <class V>
         void Transfer(V& v)
