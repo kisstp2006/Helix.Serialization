@@ -72,11 +72,11 @@ namespace helix::serialization
             else if constexpr (kind == ValueKind::Struct)
             {
                 i32 saved = version_;
-                version_ = VersionOf<T>();
-                value.Transfer(*this);
+                version_ = VersionOf(value);
+                TransferStruct(*this, value);
                 version_ = saved;
                 if (!done_ && rest_.Empty())
-                    Fail(Format("the path names a {}, not a value", TypeNameOf<T>()));
+                    Fail(Format("the path names a {}, not a value", TypeNameOf(value)));
             }
             else if constexpr (kind == ValueKind::Array)
             {
@@ -254,11 +254,11 @@ namespace helix::serialization
             else if constexpr (kind == ValueKind::Struct)
             {
                 i32 saved = version_;
-                version_ = VersionOf<T>();
-                value.Transfer(*this);
+                version_ = VersionOf(value);
+                TransferStruct(*this, value);
                 version_ = saved;
                 if (!done_ && rest_.Empty())
-                    Fail(Format("the path names a {}, not a value", TypeNameOf<T>()));
+                    Fail(Format("the path names a {}, not a value", TypeNameOf(value)));
             }
             else if constexpr (kind == ValueKind::Array)
             {

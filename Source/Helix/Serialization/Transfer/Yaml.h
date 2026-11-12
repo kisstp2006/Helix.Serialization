@@ -79,15 +79,15 @@ namespace helix::serialization
             }
             else
             {
-                e_.BeginMapping(FlowOf<T>());
+                e_.BeginMapping(FlowOf(value));
                 i32 saved = version_;
-                version_ = VersionOf<T>();
+                version_ = VersionOf(value);
                 if (version_ > 1)
                 {
                     e_.Key("serializedVersion");
                     e_.Int(version_);
                 }
-                value.Transfer(*this);
+                TransferStruct(*this, value);
                 version_ = saved;
                 e_.EndMapping();
             }
@@ -201,7 +201,7 @@ namespace helix::serialization
                 i64 version = 1;
                 if (v != yaml::kNoNode && Integer(v, "serializedVersion", 1, 0x7FFFFFFF, version))
                     version_ = i32(version);
-                value.Transfer(*this);
+                TransferStruct(*this, value);
                 mapping_ = savedMapping;
                 cursor_ = savedCursor;
                 version_ = savedVersion;

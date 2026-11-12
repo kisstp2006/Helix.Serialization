@@ -28,8 +28,25 @@
 // The same function drives every visitor: YAML write and read, binary write and read, reading through an older type
 // tree, and building the type tree. A visitor tells what it does with V::kReading and V::kText, and v.Version() gives
 // the version of the data being read (the type's own version when writing), for upgrading older data.
+//
+// A type that cannot have the member (one of a library that does not depend on this one) serializes through a
+// specialization of TransferTraits instead:
+//
+//   template <>
+//   struct TransferTraits<Vector3>
+//   {
+//       static constexpr StringView kTypeName = "Vector3f";
+//       static constexpr bool kFlow = true;
+//       template <class V>
+//       static void Transfer(V& v, Vector3& value) { v.Field("x", value.x); ... }
+//   };
 namespace helix::serialization
 {
+    // Specialized for types serialized without a member Transfer (kTypeName, optional kFlow and kVersion, a static
+    // Transfer(V&, T&)).
+    template <class T>
+    struct TransferTraits;
+
     // The kinds of values a field can hold.
     enum class ValueKind : u8
     {
@@ -138,7 +155,23 @@ namespace helix::serialization
     }
 
     template <class T>
-    concept Transferable = requires(T& t, detail::TransferProbe& v) { t.Transfer(v); };
+    concept MemberTransferable = requires(T& t, detail::TransferProbe& v) { t.Transfer(v); };
+
+    template <class T>
+    concept TraitsTransferable = requires(T& t, detail::TransferProbe& v) { TransferTraits<T>::Transfer(v, t); };
+
+    template <class T>
+    concept Transferable = MemberTransferable<T> || TraitsTransferable<T>;
+
+    // A struct's fields through its member Transfer or its TransferTraits.
+    template <class V, class T>
+    void TransferStruct(V& v, T& value)
+    {
+        if constexpr (MemberTransferable<T>)
+            value.Transfer(v);
+        else
+            TransferTraits<T>::Transfer(v, value);
+    }
 
     template <class T>
     constexpr ValueKind KindOf()
@@ -192,6 +225,8 @@ namespace helix::serialization
     {
         if constexpr (requires { T::kVersion; })
             return T::kVersion;
+        else if constexpr (requires { TransferTraits<T>::kVersion; })
+            return TransferTraits<T>::kVersion;
         else
             return 1;
     }
@@ -201,6 +236,8 @@ namespace helix::serialization
     {
         if constexpr (requires { T::kFlow; })
             return T::kFlow;
+        else if constexpr (requires { TransferTraits<T>::kFlow; })
+            return TransferTraits<T>::kFlow;
         else
             return false;
     }
@@ -208,7 +245,52 @@ namespace helix::serialization
     template <class T>
     constexpr StringView TypeNameOf()
     {
-        static_assert(requires { T::kTypeName; }, "a type with Transfer names itself with static constexpr StringView kTypeName");
-        return T::kTypeName;
+        if constexpr (requires { T::kTypeName; })
+            return T::kTypeName;
+        else
+        {
+            static_assert(requires { TransferTraits<T>::kTypeName; }, "a type with Transfer names itself with static constexpr StringView kTypeName");
+            return TransferTraits<T>::kTypeName;
+        }
+    }
+
+    // The same of a value: a struct whose fields are known at run time (a script's) answers them itself, through
+    // TypeName(), StructFlow() and StructVersion().
+    template <class T>
+    StringView TypeNameOf(const T& value)
+    {
+        if constexpr (requires { value.TypeName(); })
+            return value.TypeName();
+        else
+            return TypeNameOf<T>();
+    }
+
+    template <class T>
+    bool FlowOf(const T& value)
+    {
+        if constexpr (requires { value.StructFlow(); })
+            return value.StructFlow();
+        else
+            return FlowOf<T>();
+    }
+
+    template <class T>
+    i32 VersionOf(const T& value)
+    {
+        if constexpr (requires { value.StructVersion(); })
+            return value.StructVersion();
+        else
+            return VersionOf<T>();
+    }
+
+    // The item an array type's type tree describes: a default one, or the one the array gives (items known at run
+    // time).
+    template <class T>
+    auto PrototypeOf(const T& array)
+    {
+        if constexpr (requires { array.Prototype(); })
+            return array.Prototype();
+        else
+            return typename detail::IsArray<T>::Item();
     }
 }

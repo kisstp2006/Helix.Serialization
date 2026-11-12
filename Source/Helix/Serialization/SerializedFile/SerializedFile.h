@@ -58,6 +58,18 @@ namespace helix::serialization
             objects_.Push({fileID, type, at, data_.Size() - at});
         }
 
+        // An object whose fields are known at run time: its type tree and hash given (built with TypeTreeBuild).
+        template <class T>
+        void Add(i64 fileID, i32 classID, T& object, const TypeTree& tree, const Md5Digest& hash, ReferenceTable* references = nullptr)
+        {
+            u32 type = Type(classID, tree, hash);
+            while (data_.Size() % 8 != 0)
+                data_.Push(u8(0));
+            usize at = data_.Size();
+            WriteBinary(object, data_, references);
+            objects_.Push({fileID, type, at, data_.Size() - at});
+        }
+
         void AddExternal(const Guid& guid, i32 type, StringView path);
 
         // The file, its objects in fileID order. Two objects with one fileID are an error.
@@ -94,8 +106,15 @@ namespace helix::serialization
         template <class T>
         bool Read(u32 object, T& out, String& error, ReferenceTable* references = nullptr) const
         {
+            return Read(object, out, TypeHashOf<T>(), error, references);
+        }
+
+        // With the hash of the layout the object has now (fields known at run time).
+        template <class T>
+        bool Read(u32 object, T& out, const Md5Digest& hash, String& error, ReferenceTable* references = nullptr) const
+        {
             const SerializedType& type = types_[objects_[object].type];
-            if (type.hash == TypeHashOf<T>())
+            if (type.hash == hash)
                 return ReadBinary(Data(object), out, error, references);
             if (!typeTrees_)
                 return error = Format("object {} was written with another layout of {} and the file has no type trees", objects_[object].fileID, TypeNameOf<T>()),

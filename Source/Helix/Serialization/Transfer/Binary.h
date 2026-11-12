@@ -21,6 +21,8 @@ namespace helix::serialization
     public:
         static constexpr bool kReading = false;
         static constexpr bool kText = false;
+        // A visitor of the binary form (opaque structs are bytes to it).
+        static constexpr bool kBinary = true;
 
         explicit BinaryWrite(Array<u8>& out, ReferenceTable* references = nullptr) : out_(out), base_(out.Size()), references_(references) {}
 
@@ -34,6 +36,7 @@ namespace helix::serialization
 
         // Object references go through the table (the raw value is the fileID without one).
         void SetReferences(ReferenceTable* table) { references_ = table; }
+        ReferenceTable* References() const { return references_; }
         void ObjectReference(u64& object) { TransferObjectReference(*this, references_, object); }
 
         template <class T>
@@ -69,8 +72,8 @@ namespace helix::serialization
             else
             {
                 i32 saved = version_;
-                version_ = VersionOf<T>();
-                value.Transfer(*this);
+                version_ = VersionOf(value);
+                TransferStruct(*this, value);
                 version_ = saved;
             }
         }
@@ -105,6 +108,7 @@ namespace helix::serialization
     public:
         static constexpr bool kReading = true;
         static constexpr bool kText = false;
+        static constexpr bool kBinary = true;
 
         explicit BinaryRead(Span<const u8> data, ReferenceTable* references = nullptr) : data_(data), references_(references) {}
 
@@ -125,6 +129,7 @@ namespace helix::serialization
 
         // Object references go through the table (the raw value is the fileID without one).
         void SetReferences(ReferenceTable* table) { references_ = table; }
+        ReferenceTable* References() const { return references_; }
         void ObjectReference(u64& object) { TransferObjectReference(*this, references_, object); }
 
         template <class T>
@@ -172,8 +177,8 @@ namespace helix::serialization
             else
             {
                 i32 saved = version_;
-                version_ = VersionOf<T>();
-                value.Transfer(*this);
+                version_ = VersionOf(value);
+                TransferStruct(*this, value);
                 version_ = saved;
             }
         }
@@ -234,6 +239,7 @@ namespace helix::serialization
     public:
         static constexpr bool kReading = true;
         static constexpr bool kText = false;
+        static constexpr bool kBinary = true;
 
         SafeBinaryRead(const TypeTree& tree, Span<const u8> data, ReferenceTable* references = nullptr)
             : tree_(tree), data_(data), references_(references)
@@ -263,6 +269,7 @@ namespace helix::serialization
         i32 Version() const { return version_; }
         // Object references go through the table (the raw value is the fileID without one).
         void SetReferences(ReferenceTable* table) { references_ = table; }
+        ReferenceTable* References() const { return references_; }
         void ObjectReference(u64& object) { TransferObjectReference(*this, references_, object); }
         bool Failed() const { return failed_; }
         const String& Error() const { return error_; }
@@ -348,7 +355,7 @@ namespace helix::serialization
                 frames_.Push({begin, u32(children_.Size()), 0});
                 i32 saved = version_;
                 version_ = n.version;
-                value.Transfer(*this);
+                TransferStruct(*this, value);
                 version_ = saved;
                 frames_.Pop();
                 children_.Resize(begin);

@@ -67,6 +67,7 @@ namespace helix::serialization
     public:
         static constexpr bool kReading = false;
         static constexpr bool kText = false;
+        static constexpr bool kBinary = true;
 
         explicit TypeTreeBuild(TypeTree& tree) : tree_(tree) {}
 
@@ -90,9 +91,9 @@ namespace helix::serialization
             n.fieldName = tree_.AddString(name);
             if constexpr (kind == ValueKind::Struct)
             {
-                n.typeName = tree_.AddString(TypeNameOf<T>());
-                n.version = VersionOf<T>();
-                n.flags = FlowOf<T>() ? TypeTreeNode::kFlow : 0;
+                n.typeName = tree_.AddString(TypeNameOf(value));
+                n.version = VersionOf(value);
+                n.flags = FlowOf(value) ? TypeTreeNode::kFlow : 0;
             }
             else
                 n.typeName = tree_.AddString(KindName(kind));
@@ -102,7 +103,7 @@ namespace helix::serialization
             level_++;
             if constexpr (kind == ValueKind::Array)
             {
-                auto item = typename detail::IsArray<T>::Item();
+                auto item = PrototypeOf(value);
                 Node("data", item);
             }
             else if constexpr (kind == ValueKind::FixedArray)
@@ -111,7 +112,7 @@ namespace helix::serialization
             {
                 i32 saved = version_;
                 version_ = n.version;
-                value.Transfer(*this);
+                TransferStruct(*this, value);
                 version_ = saved;
             }
             level_--;

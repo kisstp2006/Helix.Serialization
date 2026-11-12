@@ -11,7 +11,8 @@ writes and reads types as YAML and binary, type trees, and binary serialized fil
 | `Source/Helix/Serialization/Yaml/Parser.h` | `Parse(text, tree, error)` |
 | `Source/Helix/Serialization/Yaml/Emitter.h` | `Emitter`, a streaming writer of the dialect, and `Write(tree, out)` |
 | `Source/Helix/Serialization/Json/Tree.h`, `Parser.h`, `Writer.h` | The same flat tree for JSON, `Parse` (RFC 8259), a compact or pretty `Writer`, `Write(tree, out)` |
-| `Source/Helix/Serialization/Transfer/Traits.h` | How a type declares `Transfer`, `ValueKind`, `AssetReference`, `ReferenceTable` |
+| `Source/Helix/Serialization/Transfer/Traits.h` | How a type declares `Transfer` (or `TransferTraits<T>` for types of other libraries), `ValueKind`, `AssetReference`, `ReferenceTable` |
+| `Source/Helix/Serialization/Transfer/Dynamic.h` | `DynamicVisitor`, one C ABI over any visitor for fields known at run time (`DynamicAdapter<V>`, the C++ side `DynamicFields`, `VisitDynamic`) |
 | `Source/Helix/Serialization/Transfer/Yaml.h` | `YamlWrite`, `YamlRead`, `WriteYaml`, `ReadYaml` |
 | `Source/Helix/Serialization/Transfer/Binary.h` | `BinaryWrite`, `BinaryRead`, `SafeBinaryRead`, `WriteBinary`, `ReadBinary` |
 | `Source/Helix/Serialization/Transfer/Property.h` | `PropertyWrite`, `ApplyProperty`: one field changed by its path (`m_LocalPosition.x`, `list.Array.size`, `list.Array.data[3]`), as prefab modifications do; `PropertyRead`, `ReadProperty`: one field read as text the same way |
@@ -135,6 +136,24 @@ writes a type as `{x: 0, y: 0}`. The visitors:
 Transfer must visit the same fields whatever the values are, except that text may leave out fields (as `AssetReference`
 does for local references).
 
+A type of a library that does not depend on this one (a vector of a math library) gets the same through a
+specialization instead of a member:
+
+```cpp
+template <>
+struct helix::serialization::TransferTraits<Vector3>
+{
+    static constexpr StringView kTypeName = "Vector3f";
+    static constexpr bool kFlow = true;
+    template <class V>
+    static void Transfer(V& v, Vector3& value) { v.Field("x", value.x); v.Field("y", value.y); v.Field("z", value.z); }
+};
+```
+
+A struct whose fields are only known at run time answers `TypeName()`, `StructFlow()` and `StructVersion()` itself, an
+array type of such structs its default item with `Prototype()`, and `SerializedFileWriter::Add` and
+`SerializedFile::Read` take a type tree and hash given at run time.
+
 Object references: a reference type calls `v.ObjectReference(u64&)` in its Transfer instead of naming fields. Every
 visitor then reads and writes the reference as the fields of an `AssetReference`, turned into the caller's object
 values by a `ReferenceTable` (`ToFile`, `FromFile`) passed to `WriteYaml`, `ReadYaml`, `WriteBinary`, `ReadBinary`,
@@ -150,6 +169,33 @@ struct Handle
     void Transfer(V& v) { v.ObjectReference(object); }
 };
 ```
+
+## Fields known at run time
+
+The fields of scripts (C++ classes of game modules, C# classes) reach every visitor through one C ABI. A
+`DynamicVisitor` is a visitor behind a table of functions: a value (numbers, a bool as one byte, a `Guid`), a string
+(through get and set functions), an object reference (a u64), a struct and an array (each with a descriptor of
+functions that reach its content), the visitor's version and its `ObjectReference`. `DynamicAdapter<V>::Make(v)` gives
+the table of any visitor; it turns each call into `v.Field` with proxies for structs and arrays, so YAML, binary, the
+safe reader, type trees and property paths work as for C++ types. The C++ side is a visitor too:
+
+```cpp
+void TransferScript(void* object, helix::serialization::DynamicVisitor* visitor)
+{
+    Script& s = *static_cast<Script*>(object);
+    helix::serialization::VisitDynamic(*visitor, [&s](auto& f) {
+        f.Field("speed", s.speed);     // numbers, bools, enums, String, Guid
+        f.Field("path", s.path);       // Array<T>, T[N] (an array that keeps its length)
+        f.Field("home", s.home);       // a type with Transfer or TransferTraits
+        f.Field("target", s.target);   // a type with ObjectReferenceTraits: an object reference
+    });
+}
+```
+
+A struct descriptor with `kDynamicOpaque` (data whose type differs per value, such as a managed reference's) is its
+own type tree and binary form to the visitors of the binary form (`V::kBinary`: `BinaryWrite`, `BinaryRead`,
+`SafeBinaryRead`, `TypeTreeBuild`) and a struct to the others. `kDynamicSerializes` marks the visitors that write a
+form, for callbacks that run before serialization.
 
 ## Serialized files
 
