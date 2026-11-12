@@ -510,3 +510,31 @@ HX_TEST(Transfer, PropertyPathsChangeOneField)
     // A field name that only starts the path's name does not match.
     HX_CHECK(!ApplyProperty(t, "m_Nam", "x", none, &table, error) && t.m_Name == StringView("Renamed"));
 }
+
+HX_TEST(Transfer, PropertyPathsReadOneField)
+{
+    Table table;
+    Target t;
+    t.m_Name = String("Hero");
+    t.m_Layer = 9;
+    t.m_Mode = Switch::On;
+    t.m_Position.y = -2.5f;
+    t.m_Path.Resize(2);
+    t.m_Path[1].x = 4;
+    String text, error;
+    HX_CHECK(ReadProperty(t, "m_Name", text, error) && text == StringView("Hero"));
+    HX_CHECK(ReadProperty(t, "m_IsActive", text, error) && text == StringView("1"));
+    HX_CHECK(ReadProperty(t, "m_Layer", text, error) && text == StringView("9"));
+    HX_CHECK(ReadProperty(t, "m_Mode", text, error) && text == StringView("1"));
+    HX_CHECK(ReadProperty(t, "m_Position.y", text, error) && text == StringView("-2.5"));
+    HX_CHECK(ReadProperty(t, "m_Path.Array.size", text, error) && text == StringView("2"));
+    HX_CHECK(ReadProperty(t, "m_Path.Array.data[1].x", text, error) && text == StringView("4"));
+    // What was read goes back through the writer unchanged.
+    AssetReference none;
+    Target copy;
+    HX_CHECK(ReadProperty(t, "m_Position.y", text, error) && ApplyProperty(copy, "m_Position.y", text, none, &table, error) && copy.m_Position.y == -2.5f);
+    // Not values: structs, arrays as a whole, references; unknown fields; items out of range.
+    HX_CHECK(!ReadProperty(t, "m_Position", text, error) && error.View().Contains("not a value"));
+    HX_CHECK(!ReadProperty(t, "m_Link", text, error) && !ReadProperty(t, "m_Nothing", text, error) && error.View().Contains("no field"));
+    HX_CHECK(!ReadProperty(t, "m_Path.Array.data[5].x", text, error) && !ReadProperty(t, "m_Name.x", text, error));
+}
